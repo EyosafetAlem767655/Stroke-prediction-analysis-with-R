@@ -1,0 +1,285 @@
+---
+title: "Build and deploy a stroke prediction model using R"
+author: "Eyosafet Alem Abay"
+date: "March 7th, 2024"
+output: html_document
+---
+
+  # Introduction
+ 
+
+## R Markdown
+
+  This report presents the data analysis carried out for the project on building and deploying a stroke prediction model in R. It includes various analyses such as data exploration, summary statistics, and the construction of prediction models.
+
+## Data Description
+
+According to the World Health Organization (WHO), stroke is the second leading cause of death globally, accounting for approximately 11% of total deaths.
+
+The dataset used in this project aims to predict the likelihood of a patient experiencing a stroke based on input parameters such as gender, age, existing medical conditions, and smoking status. Each row in the dataset provides relevant information about a patient.
+
+# Task One: Import data and data preprocessing
+
+## Load data and install packages
+
+library(readr)
+
+# use your file path here
+file_path <- "C:\\Users\\Eyosi\\Downloads\\zWTIOyzKTSG0w5jU5Io_Nw_15c1635f70334a3a9d4b1ec2132e14f1_stroke-prediction\\healthcare-dataset-stroke-data.csv"
+# Read the CSV file into a dataframe
+df <- read_csv(file_path)
+
+# display the first rows
+head(df)
+
+## Describe and explore the data
+
+# Summary statistics
+summary(df)
+library(ggplot2)
+# Histogram for a numeric variable (replace 'numeric_column' with the actual column name)
+ggplot(df, aes(x = age)) +
+  geom_histogram(binwidth = 1) +
+  labs(title = "Histogram of Age")
+
+# Bar plot for a categorical variable (replace 'categorical_column' with the actual column name)
+ggplot(df, aes(x = work_type)) +
+  geom_bar() +
+  labs(title = "Bar Plot of Work Type")
+
+# Check for missing values
+sum(is.na(df))
+
+
+
+# Scatter plot 
+ggplot(df, aes(x = age, y = hypertension)) +
+  geom_point() +
+  labs(title = "Scatter Plot: Age vs. Hypertension")
+
+# Density plot for a numeric variable 
+ggplot(df, aes(x = age)) +
+  geom_density() +
+  labs(title = "Density Plot: Age")
+
+# Box plot for a numeric variable 
+ggplot(df, aes(x = factor(work_type), y = age)) +
+  geom_boxplot() +
+  labs(title = "Box Plot: Age by Work Type")
+
+# Check for missing values
+sum(is.na(df))
+
+# Select only the numeric columns
+numeric_columns <- df[, c("age", "hypertension", "heart_disease")]
+
+# Compute the correlation matrix
+cor_matrix <- cor(numeric_columns)
+
+# Print the correlation matrix
+print(cor_matrix)
+
+
+  
+
+# Task Two: Build prediction models
+
+library(caret)
+
+# Set the seed for reproducibility
+set.seed(123)
+
+# Split the data into training and test datasets
+train_indices <- createDataPartition(df$stroke, p = 0.7, list = FALSE)
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+
+
+library(rpart)
+
+# Load necessary packages
+library(rpart)
+library(randomForest)
+library(e1071)
+
+
+
+# Fit a decision tree model
+model_decision_tree <- rpart(stroke ~ ., data = train_data)
+
+# Make predictions on the test data
+predictions_decision_tree <- predict(model_decision_tree, newdata = test_data)
+
+# Convert predictions to binary values based on a threshold
+threshold <- 0.5
+binary_predictions_decision_tree <- ifelse(predictions_decision_tree >= threshold, 1, 0)
+
+# Combine test data with decision tree predictions
+decision_tree_results <- data.frame(test_data, predictions_decision_tree = binary_predictions_decision_tree)
+
+# Check for missing values in the training data
+if (any(!complete.cases(train_data))) {
+  stop("Missing values found in the training data.")
+}
+
+# Handle missing values in the test data
+if (any(!complete.cases(test_data))) {
+  # Option 1: Remove rows with missing values
+  test_data <- test_data[complete.cases(test_data), ]
+}
+
+
+
+
+# Fit a Naive Bayes model
+model_naive_bayes <- naiveBayes(stroke ~ ., data = train_data)
+
+# Make predictions on the test data
+predictions_naive_bayes <- predict(model_naive_bayes, newdata = test_data)
+
+# Combine test data with Naive Bayes predictions
+naive_bayes_results <- data.frame(test_data, predictions_naive_bayes)
+
+
+# Fit a Logistic Regression model
+# Split the data into training and test sets
+set.seed(123)  # For reproducibility
+train_indices <- sample(1:nrow(df), 0.7 * nrow(df))  # 70% for training
+train_data <- df[train_indices, ]
+test_data <- df[-train_indices, ]
+
+# Convert 'bmi' variable to factor and set levels
+train_data$bmi <- factor(train_data$bmi)
+levels(train_data$bmi) <- c(levels(train_data$bmi), levels(test_data$bmi))
+
+# Train the logistic regression model
+model <- glm(stroke ~ ., data = train_data, family = binomial())
+
+# Convert 'bmi' variable in test data to factor and set levels
+test_data$bmi <- factor(test_data$bmi, levels = levels(train_data$bmi))
+
+# Generate predictions on the test data
+probabilities_logistic <- predict(model, newdata = test_data, type = "response")
+predictions_logistic <- ifelse(probabilities_logistic > 0.5, 1, 0)
+
+
+# Display the prediction results
+print("Decision Tree Predictions:")
+print(decision_tree_results)
+
+# Display the prediction results
+print("Naive Bayes Predictions:")
+print(naive_bayes_results)
+
+print("Logestic regression Predictions:")
+print(predictions_logistic)
+
+# Task Three: Evaluate and select prediction models
+
+
+
+# Evaluate model performances
+accuracy_decision_tree <- sum(predictions_decision_tree == test_data$stroke) / length(test_data$stroke)
+accuracy_naive_bayes <- sum(predictions_naive_bayes == test_data$stroke) / length(test_data$stroke)
+accuracy_logistic <- sum(predictions_logistic == test_data$stroke) / length(test_data$stroke)
+
+# Compare model performances
+model_accuracies <- c(Decision_Tree = accuracy_decision_tree,
+                      Naive_Bayes = accuracy_naive_bayes,
+                      Logistic_Regression = accuracy_logistic)
+
+# Select the best model
+best_model <- names(model_accuracies)[which.max(model_accuracies)]
+
+
+
+
+# Task Four: Deploy the prediction model
+library(shiny)
+library(caret)
+library(rpart)
+library(randomForest)
+library(e1071)
+
+# Define UI
+ui <- fluidPage(
+  titlePanel("Stroke Prediction Model Deployment"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      h4("Select Model"),
+      selectInput("model", "Choose Model", choices = c("Decision Tree", "Naive Bayes", "Logistic Regression")),
+      actionButton("predictButton", "Predict")
+    ),
+    
+    mainPanel(
+      h4("Prediction Results"),
+      verbatimTextOutput("predictions")
+    )
+  )
+)
+
+# Define server
+server <- function(input, output) {
+  
+  # Load the dataset
+  df <- read.csv("C:\\Users\\Eyosi\\Downloads\\zWTIOyzKTSG0w5jU5Io_Nw_15c1635f70334a3a9d4b1ec2132e14f1_stroke-prediction\\healthcare-dataset-stroke-data.csv")  
+  
+  # Split the data into training and test datasets
+  train_indices <- createDataPartition(df$stroke, p = 0.7, list = FALSE)
+  train_data <- df[train_indices, ]
+  test_data <- df[-train_indices, ]
+  
+  # Fit a decision tree model
+  model_decision_tree <- rpart(stroke ~ ., data = train_data)
+  
+  # Fit a Naive Bayes model
+  model_naive_bayes <- naiveBayes(stroke ~ ., data = train_data)
+  
+  # Fit a Logistic Regression model
+  train_data$bmi <- factor(train_data$bmi)
+  levels(train_data$bmi) <- c(levels(train_data$bmi), levels(test_data$bmi))
+  model_logistic <- glm(stroke ~ ., data = train_data, family = binomial())
+  
+  # Define prediction function
+  predictStroke <- function(model, data) {
+    if (model == "Decision Tree") {
+      predictions <- predict(model_decision_tree, newdata = data)
+    } else if (model == "Naive Bayes") {
+      predictions <- predict(model_naive_bayes, newdata = data)
+    } else {
+      data$bmi <- factor(data$bmi, levels = levels(train_data$bmi))
+      probabilities <- predict(model_logistic, newdata = data, type = "response")
+      predictions <- ifelse(probabilities > 0.5, 1, 0)
+    }
+    return(predictions)
+  }
+  
+  # Define prediction event
+  observeEvent(input$predictButton, {
+    selected_model <- input$model
+    if (!is.null(selected_model)) {
+      if (selected_model == "Decision Tree") {
+        predictions <- predictStroke("Decision Tree", test_data)
+      } else if (selected_model == "Naive Bayes") {
+        predictions <- predictStroke("Naive Bayes", test_data)
+      } else {
+        predictions <- predictStroke("Logistic Regression", test_data)
+      }
+      output$predictions <- renderText({
+        paste("Model:", selected_model, "\n",
+              "Predictions:", predictions)
+      })
+    }
+  })
+}
+
+# Run the Shiny app
+shinyApp(ui = ui, server = server)
+
+
+
+
+# Task Five: Findings and Conclusions
+
